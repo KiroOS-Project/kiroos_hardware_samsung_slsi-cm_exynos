@@ -894,12 +894,18 @@ int exynos5_open(const struct hw_module_t *module, const char *name,
     lcd_xres = info.reserved[0];
     lcd_yres = info.reserved[1];
 
-    refreshRate = 1000000000000LLU /
-        (
-         uint64_t( info.upper_margin + info.lower_margin + lcd_yres )
-         * ( info.left_margin  + info.right_margin + lcd_xres )
-         * info.pixclock
-        );
+    /*
+     * KiroOS Beta 4: rounded to the nearest Hz. The kernel derives pixclock from the nominal
+     * 60 Hz without the porches, so this came to 59.55 and the division cut it to 59: apps
+     * (DevCheck) showed a 59 Hz screen and frame pacing used a 16.95 ms period. The panel
+     * paces itself (TE) at its nominal 60 Hz (measured 59.6 Hz, like most "60 Hz" panels).
+     */
+    {
+        const uint64_t frameUnits = uint64_t( info.upper_margin + info.lower_margin + lcd_yres )
+            * ( info.left_margin  + info.right_margin + lcd_xres )
+            * info.pixclock;
+        refreshRate = frameUnits ? (1000000000000LLU + frameUnits / 2) / frameUnits : 0;
+    }
 
     if (refreshRate == 0) {
         ALOGW("invalid refresh rate, assuming 60 Hz");
